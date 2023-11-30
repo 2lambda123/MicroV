@@ -27,6 +27,7 @@
 #ifndef KVM_LAPIC_STATE_H
 #define KVM_LAPIC_STATE_H
 
+#define KVM_APIC_REG_SIZE 1024
 #include <stdint.h>
 
 #ifdef __cplusplus
@@ -44,8 +45,9 @@ extern "C"
      */
     struct kvm_lapic_state
     {
-        /** @brief replace me with contents from KVM API */
-        int32_t dummy;
+
+        /** @brief the registers of lapic to set or get */
+        char regs[KVM_APIC_REG_SIZE];
     };
 
 #pragma pack(pop)

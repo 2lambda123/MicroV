@@ -24,31 +24,32 @@
  * SOFTWARE.
  */
 
-#ifndef HANDLE_VM_KVM_CREATE_PIT2_H
-#define HANDLE_VM_KVM_CREATE_PIT2_H
+#ifndef KVM_LAPIC_STATE_HPP
+#define KVM_LAPIC_STATE_HPP
 
-#include <kvm_pit_config.h>
-#include <mv_types.h>
+#include <bsl/array.hpp>
+#include <bsl/convert.hpp>
+#include <bsl/safe_integral.hpp>
 
-#ifdef __cplusplus
-extern "C"
+#pragma pack(push, 1)
+
+namespace shim
 {
-#endif
+    /// @brief defines the size of the padding3 field
+    constexpr auto KVM_APIC_REG_SIZE{1024_umx};
+    /// @struct kvm_lapic_state
+    ///
+    /// <!-- description -->
+    ///   @brief see /include/uapi/linux/kvm.h in Linux for more details.
+    ///
+    struct kvm_lapic_state final
+    {
+        /// @brief TODO
+        bsl::array<bsl::uint8, KVM_APIC_REG_SIZE.get()> regs;
+    };
 
-    /**
-     * <!-- description -->
-     *   @brief Handles the execution of kvm_create_pit2.
-     *
-     * <!-- inputs/outputs -->
-     *   @param pmut_vm the VM to add the VCPU to
-     *   @param pmut_ioctl_args the arguments provided by userspace
-     *   @return SHIM_SUCCESS on success, SHIM_FAILURE on failure.
-     */
-    NODISCARD int64_t handle_vm_kvm_create_pit2(
-        struct shim_vm_t *const pmut_vm, struct kvm_pit_config *const pmut_ioctl_args) NOEXCEPT;
-
-#ifdef __cplusplus
 }
-#endif
+
+#pragma pack(pop)
 
 #endif

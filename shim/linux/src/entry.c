@@ -36,6 +36,7 @@
 #include <handle_system_kvm_get_supported_cpuid.h>
 #include <handle_system_kvm_get_vcpu_mmap_size.h>
 #include <handle_vcpu_kvm_get_fpu.h>
+#include <handle_vcpu_kvm_get_lapic.h>
 #include <handle_vcpu_kvm_get_mp_state.h>
 #include <handle_vcpu_kvm_get_msrs.h>
 #include <handle_vcpu_kvm_get_regs.h>
@@ -43,13 +44,19 @@
 #include <handle_vcpu_kvm_get_tsc_khz.h>
 #include <handle_vcpu_kvm_run.h>
 #include <handle_vcpu_kvm_set_fpu.h>
+#include <handle_vcpu_kvm_set_lapic.h>
 #include <handle_vcpu_kvm_set_mp_state.h>
 #include <handle_vcpu_kvm_set_msrs.h>
 #include <handle_vcpu_kvm_set_regs.h>
 #include <handle_vcpu_kvm_set_sregs.h>
 #include <handle_vm_kvm_check_extension.h>
+#include <handle_vm_kvm_create_irqchip.h>
+#include <handle_vm_kvm_create_pit2.h>
 #include <handle_vm_kvm_create_vcpu.h>
 #include <handle_vm_kvm_destroy_vcpu.h>
+#include <handle_vm_kvm_get_irqchip.h>
+#include <handle_vm_kvm_irqfd.h>
+#include <handle_vm_kvm_set_irqchip.h>
 #include <handle_vm_kvm_set_user_memory_region.h>
 #include <linux/anon_inodes.h>
 #include <linux/kernel.h>
@@ -506,16 +513,33 @@ dispatch_vm_kvm_create_device(struct kvm_create_device *const ioctl_args)
 }
 
 static long
-dispatch_kvm_create_irqchip(void)
+dispatch_kvm_create_irqchip(struct shim_vm_t *pmut_mut_vm)
 {
-    return -EINVAL;
+    if (handle_vm_kvm_create_irqchip(pmut_mut_vm)) {
+        bferror("handle_vm_kvm_create_irqchip failed");
+        return -EINVAL;
+    }
+    return SHIM_SUCCESS;
 }
 
 static long
-dispatch_vm_kvm_create_pit2(struct kvm_pit_config *const ioctl_args)
+dispatch_vm_kvm_create_pit2(
+    struct shim_vm_t *const pmut_vm, struct kvm_pit_config *const user_args)
 {
-    (void)ioctl_args;
-    return -EINVAL;
+    uint32_t ret;
+    struct kvm_pit_config mut_args;
+    uint64_t const size = sizeof(mut_args);
+
+    if (platform_copy_from_user(&mut_args, user_args, size)) {
+        bferror("platform_copy_from_user failed");
+        return -EINVAL;
+    }
+
+    if (handle_vm_kvm_create_pit2(pmut_vm, user_args)) {
+        bferror("handle_vm_kvm_create_pit2 failed");
+        return -EINVAL;
+    }
+    return (long)ret;
 }
 
 static long
@@ -581,10 +605,25 @@ dispatch_vm_kvm_get_dirty_log(struct kvm_dirty_log *const ioctl_args)
 }
 
 static long
-dispatch_vm_kvm_get_irqchip(struct kvm_irqchip *const ioctl_args)
+dispatch_vm_kvm_get_irqchip(
+    struct shim_vm_t *const pmut_vm, struct kvm_irqchip *const user_args)
 {
-    (void)ioctl_args;
-    return -EINVAL;
+    {
+        struct kvm_irqchip mut_args;
+        uint64_t const size = sizeof(mut_args);
+
+        if (handle_vm_kvm_get_irqchip(pmut_vm, &mut_args)) {
+            bferror("handle_vm_kvm_get_irqchip failed");
+            return -EINVAL;
+        }
+
+        if (platform_copy_to_user(user_args, &mut_args, size)) {
+            bferror("platform_copy_to_user failed");
+            return -EINVAL;
+        }
+
+        return SHIM_SUCCESS;
+    }
 }
 
 static long
@@ -623,10 +662,23 @@ dispatch_vm_kvm_irq_line(struct kvm_irq_level *const ioctl_args)
 }
 
 static long
-dispatch_vm_kvm_irqfd(struct kvm_irqfd *const ioctl_args)
+dispatch_vm_kvm_irqfd(
+    struct shim_vm_t *const pmut_vm, struct kvm_irqfd *const pmut_ioctl_args)
 {
-    (void)ioctl_args;
-    return -EINVAL;
+    struct kvm_irqfd mut_args;
+    uint64_t const size = sizeof(mut_args);
+
+    if (platform_copy_from_user(&mut_args, pmut_ioctl_args, size)) {
+        bferror("platform_copy_from_user failed");
+        return -EINVAL;
+    }
+
+    if (handle_vm_kvm_irqfd(pmut_vm, &mut_args)) {
+        bferror("handle_vm_kvm_irqfd failed");
+        return -EINVAL;
+    }
+
+    return 0;
 }
 
 static long
@@ -687,10 +739,27 @@ dispatch_vm_kvm_set_identity_map_addr(uint64_t *const ioctl_args)
 }
 
 static long
-dispatch_vm_kvm_set_irqchip(struct kvm_irqchip *const ioctl_args)
+dispatch_vm_kvm_set_irqchip(
+    struct shim_vm_t *const pmut_vm, struct kvm_irqchip *const user_args)
 {
-    (void)ioctl_args;
-    return -EINVAL;
+    struct kvm_irqchip mut_args;
+    uint64_t const size = sizeof(mut_args);
+
+    if (NULL == user_args) {
+        bferror("user_args are null");
+        return -EINVAL;
+    }
+
+    if (platform_copy_from_user(&mut_args, user_args, size)) {
+        bferror("platform_copy_from_user failed");
+        return -EINVAL;
+    }
+
+    if (handle_vm_kvm_set_irqchip(pmut_vm, &mut_args)) {
+        bferror("handle_vm_kvm_set_irqchip failed");
+        return -EINVAL;
+    }
+    return SHIM_SUCCESS;
 }
 
 static long
@@ -786,12 +855,12 @@ dev_unlocked_ioctl_vm(
         }
 
         case KVM_CREATE_IRQCHIP: {
-            return dispatch_kvm_create_irqchip();
+            return dispatch_kvm_create_irqchip(pmut_mut_vm);
         }
 
         case KVM_CREATE_PIT2: {
             return dispatch_vm_kvm_create_pit2(
-                (struct kvm_pit_config *)ioctl_args);
+                pmut_mut_vm, (struct kvm_pit_config *)ioctl_args);
         }
 
         case KVM_CREATE_VCPU: {
@@ -820,7 +889,7 @@ dev_unlocked_ioctl_vm(
 
         case KVM_GET_IRQCHIP: {
             return dispatch_vm_kvm_get_irqchip(
-                (struct kvm_irqchip *)ioctl_args);
+                pmut_mut_vm, (struct kvm_irqchip *)ioctl_args);
         }
 
         case KVM_GET_PIT2: {
@@ -848,7 +917,9 @@ dev_unlocked_ioctl_vm(
         }
 
         case KVM_IRQFD: {
-            return dispatch_vm_kvm_irqfd((struct kvm_irqfd *)ioctl_args);
+            return dispatch_vm_kvm_irqfd(
+                (struct shim_vm_t *)pmut_mut_vm,
+                (struct kvm_irqfd *)ioctl_args);
         }
 
         case KVM_REGISTER_COALESCED_MMIO: {
@@ -891,7 +962,7 @@ dev_unlocked_ioctl_vm(
 
         case KVM_SET_IRQCHIP: {
             return dispatch_vm_kvm_set_irqchip(
-                (struct kvm_irqchip *)ioctl_args);
+                pmut_mut_vm, (struct kvm_irqchip *)ioctl_args);
         }
 
         case KVM_SET_PIT2: {
@@ -976,10 +1047,27 @@ dispatch_vcpu_kvm_get_fpu(
 }
 
 static long
-dispatch_vcpu_kvm_get_lapic(struct kvm_lapic_state *const ioctl_args)
+dispatch_vcpu_kvm_get_lapic(
+    struct shim_vcpu_t const *const vcpu,
+    struct kvm_lapic_state *const user_args)
 {
-    (void)ioctl_args;
-    return -EINVAL;
+    struct kvm_lapic_state mut_args;
+
+    if (NULL == user_args) {
+        bferror("user_args are null");
+        return -EINVAL;
+    }
+
+    if (handle_vcpu_kvm_get_lapic(vcpu, &mut_args)) {
+        bferror("handle_vcpu_kvm_get_lapic failed");
+        return -EINVAL;
+    }
+
+    if (platform_copy_to_user(user_args, &mut_args, sizeof(mut_args))) {
+        bferror("platform_copy_to_user failed");
+        return -EINVAL;
+    }
+    return 0;
 }
 
 static long
@@ -1230,10 +1318,28 @@ dispatch_vcpu_kvm_set_guest_debug(struct kvm_guest_debug *const ioctl_args)
 }
 
 static long
-dispatch_vcpu_kvm_set_lapic(struct kvm_lapic_state *const ioctl_args)
+dispatch_vcpu_kvm_set_lapic(
+    struct shim_vcpu_t const *const vcpu,
+    struct kvm_lapic_state *const user_args)
 {
-    (void)ioctl_args;
-    return -EINVAL;
+    struct kvm_lapic_state mut_args;
+
+    if (NULL == user_args) {
+        bferror("user_args are null");
+        return -EINVAL;
+    }
+
+    if (platform_copy_from_user(&mut_args, user_args, sizeof(mut_args))) {
+        bferror("platform_copy_from_user failed");
+        return -EINVAL;
+    }
+
+    if (handle_vcpu_kvm_set_lapic(vcpu, &mut_args)) {
+        bferror("handle_vcpu_kvm_set_lapic failed");
+        return -EINVAL;
+    }
+
+    return 0;
 }
 
 static long
@@ -1451,7 +1557,7 @@ dev_unlocked_ioctl_vcpu(
 
         case KVM_GET_LAPIC: {
             return dispatch_vcpu_kvm_get_lapic(
-                (struct kvm_lapic_state *)ioctl_args);
+                pmut_mut_vcpu, (struct kvm_lapic_state *)ioctl_args);
         }
 
         case KVM_GET_MP_STATE: {
@@ -1548,7 +1654,7 @@ dev_unlocked_ioctl_vcpu(
 
         case KVM_SET_LAPIC: {
             return dispatch_vcpu_kvm_set_lapic(
-                (struct kvm_lapic_state *)ioctl_args);
+                pmut_mut_vcpu, (struct kvm_lapic_state *)ioctl_args);
         }
 
         case KVM_SET_MP_STATE: {
